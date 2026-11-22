@@ -142,7 +142,6 @@ tr::add "pt_BR" "installer::install_debian_opensource550.tui.yesno.opendriver.co
 tr::add "en_US" "installer::install_debian_opensource550.tui.yesno.opendriver.confirm" "You are about to install the Open Source NVIDIA driver.\n\nDo you want to continue?"
 
 installer::setup_mok() {
-    local mok_pub_path="/var/lib/dkms/mok.pub"
 
     # Instala o pacote dkms com abstração
     if ! packages::install "dkms"; then
@@ -178,7 +177,6 @@ tr::add "en_US" "installer::setup_mok.importing" "Importing MOK key..."
 tr::add "en_US" "installer::setup_mok.success" "MOK key imported successfully. To complete the key enrollment, follow these steps:\n\n1. Restart your computer and wait for the MOK Manager blue screen.\n2. Select 'Enroll MOK'.\n3. Select 'Continue'.\n4. Select 'Yes'.\n5. Enter the password you created for the MOK.\n6. Finish by selecting 'Reboot'.\n\nTip: if possible, take a photo of this screen for future reference."
 
 installer::check_secure_boot() {
-    local mok_pub_path="/var/lib/dkms/mok.pub"
 
     log::info "$(tr::t "log.installer.secureboot.start")"
 
@@ -252,6 +250,79 @@ installer::set_up_dracut() {
     fi
 }
 
+# Debian: enable contrib/non-free/non-free-firmware (backs up sources first)
+installer::enable_debian_components() {
+    local deb822="/etc/apt/sources.list.d/debian.sources"
+
+    if [ -f "$deb822" ]; then
+        cp -p "$deb822" "$deb822.bak-nvidia" 2>/dev/null
+        sed -i 's/^Components:.*$/Components: main contrib non-free non-free-firmware/' "$deb822"
+        return $?
+    fi
+
+    cp -p /etc/apt/sources.list /etc/apt/sources.list.bak-nvidia 2>/dev/null
+    packages::check_sources_components "/etc/apt/sources.list" "contrib" "non-free" "non-free-firmware" \
+        || packages::add_sources_components "/etc/apt/sources.list" "contrib" "non-free" "non-free-firmware"
+}
+
+# Ubuntu: enable restricted (proprietary drivers); idempotent
+installer::enable_ubuntu_components() {
+    packages::install "software-properties-common" || return 1
+    log::capture_cmd add-apt-repository -y restricted
+}
+
+# Enable repo components for the running distro
+installer::enable_repo_components() {
+    if utils::os::is_ubuntu; then
+        installer::enable_ubuntu_components
+    else
+        installer::enable_debian_components
+    fi
+}
+
+# Ubuntu: recommended proprietary driver via ubuntu-drivers
+installer::install_ubuntu_recommended() {
+    if ! tui::yesno::default "$(tr::t "default.tui.title.warn")" "$(tr::t "installer::install_ubuntu.confirm")"; then
+        log::info "$(tr::t "default.script.canceled.byuser")"
+        return 255
+    fi
+
+    if ! packages::install "ubuntu-drivers-common" || ! log::capture_cmd env DEBIAN_FRONTEND=noninteractive ubuntu-drivers install; then
+        log::critical "$(tr::t "default.script.canceled.byfailure")"
+        log::input _ "$(tr::t "default.script.pause")"
+        return 1
+    fi
+    return 0
+}
+
+# Ubuntu: newest open-kernel driver (nvidia-driver-NNN-open)
+installer::install_ubuntu_opensource() {
+    if ! tui::yesno::default "$(tr::t "default.tui.title.warn")" "$(tr::t "installer::install_ubuntu.confirm")"; then
+        log::info "$(tr::t "default.script.canceled.byuser")"
+        return 255
+    fi
+
+    local pkg
+    pkg="$(apt-cache pkgnames nvidia-driver- | grep -E '^nvidia-driver-[0-9]+-open$' | sort -V | tail -n1)"
+    if [[ -z "$pkg" ]]; then
+        log::error "$(tr::t "installer::install_ubuntu.open.missing")"
+        tui::msgbox::error "$(tr::t "installer::install_ubuntu.open.missing")"
+        return 1
+    fi
+
+    if ! packages::install "$pkg"; then
+        log::critical "$(tr::t "default.script.canceled.byfailure")"
+        log::input _ "$(tr::t "default.script.pause")"
+        return 1
+    fi
+    return 0
+}
+
+tr::add "pt_BR" "installer::install_ubuntu.confirm" "Você está prestes a instalar o driver NVIDIA do repositório do Ubuntu.\n\nDeseja continuar?"
+tr::add "pt_BR" "installer::install_ubuntu.open.missing" "Nenhum driver de código aberto (nvidia-driver-XXX-open) foi encontrado no repositório."
+tr::add "en_US" "installer::install_ubuntu.confirm" "You are about to install the NVIDIA driver from the Ubuntu repository.\n\nDo you want to continue?"
+tr::add "en_US" "installer::install_ubuntu.open.missing" "No open-source driver (nvidia-driver-XXX-open) was found in the repository."
+
 # Função principal para instalação do driver NVIDIA
 installer::install_nvidia() {
     log::info "$(tr::t "installer::install_nvidia.start")"
@@ -297,29 +368,13 @@ installer::install_nvidia() {
         log::info "$(tr::t "installer::install_nvidia.enable_multiarch.success")"
     fi
 
-    # Adds the non-free components to the repositories
+    # Enables the repo components the drivers need
     log::info "$(tr::t "installer::install_nvidia.sources_components")"
-    if [ -f "/etc/apt/sources.list.d/debian.sources" ]; then
-        if ! sed -i 's/^Components:.*$/Components: main contrib non-free non-free-firmware/' "/etc/apt/sources.list.d/debian.sources"; then
-            log::critical "$(tr::t "installer::install_nvidia.sources_components.failure")"
-            return 1
-        fi
-
-        log::info "$(tr::t "installer::install_nvidia.sources_components.success")"
-    else
-        if ! packages::check_sources_components "/etc/apt/sources.list" "contrib" "non-free" "non-free-firmware"; then
-            log::info "$(tr::t "installer::install_nvidia.sources_components.missing")"
-
-            if ! packages::add_sources_components "/etc/apt/sources.list" "contrib" "non-free" "non-free-firmware"; then
-                log::critical "$(tr::t "installer::install_nvidia.sources_components.failure")"
-                return 1
-            else
-                log::info "$(tr::t "installer::install_nvidia.sources_components.success")"
-            fi
-        else
-            log::info "$(tr::t "installer::install_nvidia.sources_components.ok")"
-        fi
+    if ! installer::enable_repo_components; then
+        log::critical "$(tr::t "installer::install_nvidia.sources_components.failure")"
+        return 1
     fi
+    log::info "$(tr::t "installer::install_nvidia.sources_components.success")"
 
     # Atualiza a lista de pacote
     log::info "$(tr::t "installer::install_nvidia.update_packages")"
@@ -338,7 +393,7 @@ installer::install_nvidia() {
 
     # Instala o header do kernel
     log::info "$(tr::t "installer::install_nvidia.kernel_headers")"
-    if ! packages::install "linux-headers-amd64"; then
+    if ! packages::install "$(utils::os::kernel_headers_pkg)"; then
         log::critical "$(tr::t "default.script.canceled.byfailure")"
         log::input _ "$(tr::t "default.script.pause")"
         return 1
@@ -489,7 +544,7 @@ installer::uninstall_nvidia() {
     fi
 
     # Clean up residual NVIDIA configuration files, including Nouveau blacklist
-    for f in "/etc/modprobe.d/nvidia*.conf"; do
+    for f in /etc/modprobe.d/nvidia*.conf; do
         [ -e "$f" ] && [ ! -d "$f" ] || continue
         log::info "$(tr::t_args "installer::uninstall_nvidia.removingfile" "$f")"
         rm -f "$f"
@@ -505,7 +560,9 @@ installer::uninstall_nvidia() {
     packages::reinstall xserver-xorg-core xserver-xorg-video-nouveau
 
     # Ensure required firmware for Nouveau to use NVIDIA hardware is installed
-    packages::install firmware-misc-nonfree firmware-nvidia-graphics
+    if utils::os::is_debian; then
+        packages::install_available firmware-misc-nonfree firmware-nvidia-graphics
+    fi
 
     # Update initramfs to make sure Nouveau loads correctly
     initramfs::update

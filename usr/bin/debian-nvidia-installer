@@ -178,6 +178,12 @@ script::requirements() {
         script::exit "" 1
     fi
 
+    # Only Debian 12/13 and Ubuntu 22.04/24.04 (amd64) are supported
+    if ! utils::os::is_supported; then
+        log::critical "$(tr::t_args "script::requirements.invalid_distro" "${OS_ID:-unknown} ${OS_VERSION_ID:-}")"
+        script::exit "" 1
+    fi
+
     # Check and installs dependencies
     log::info "$(tr::t "script::requirements.verifying")"
     if packages::install "dialog"; then

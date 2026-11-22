@@ -29,6 +29,13 @@ nvidia::is_driver_installed() {
 }
 
 nvidia::get_source_alias() {
+    # Ubuntu has no "nvidia-driver" package: CUDA repo or Ubuntu repo
+    if utils::os::is_ubuntu; then
+        if packages::is_installed "cuda-keyring"; then echo "cuda"; else echo "ubuntu"; fi
+        return 0
+    fi
+
+    local origin_repo
     origin_repo="$(apt-cache policy "nvidia-driver" | grep 'http' | head -n1 | awk '{print $2}')"
 
     case "$origin_repo" in

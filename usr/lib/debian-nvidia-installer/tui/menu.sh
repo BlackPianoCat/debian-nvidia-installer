@@ -218,14 +218,25 @@ tui::menu::flavors() {
     local option_labels=()
     local option_actions=()
 
-    option_labels+=("$(tr::t "tui::menu::flavors.option.debian.proprietary.535")")
-    option_actions+=("installer::install_debian_proprietary535")
+    if utils::os::is_ubuntu; then
+        option_labels+=("$(tr::t "tui::menu::flavors.option.ubuntu.recommended")")
+        option_actions+=("installer::install_ubuntu_recommended")
 
-    option_labels+=("$(tr::t "tui::menu::flavors.option.debian.proprietary.550")")
-    option_actions+=("installer::install_debian_proprietary550")
+        option_labels+=("$(tr::t "tui::menu::flavors.option.ubuntu.opensource")")
+        option_actions+=("installer::install_ubuntu_opensource")
+    else
+        option_labels+=("$(tr::t "tui::menu::flavors.option.debian.proprietary.535")")
+        option_actions+=("installer::install_debian_proprietary535")
 
-    option_labels+=("$(tr::t "tui::menu::flavors.option.debian.opensource.550")")
-    option_actions+=("installer::install_debian_opensource550")
+        # v550 is only in Debian 13+ main repos
+        if ! utils::os::is_debian12; then
+            option_labels+=("$(tr::t "tui::menu::flavors.option.debian.proprietary.550")")
+            option_actions+=("installer::install_debian_proprietary550")
+
+            option_labels+=("$(tr::t "tui::menu::flavors.option.debian.opensource.550")")
+            option_actions+=("installer::install_debian_opensource550")
+        fi
+    fi
 
     option_labels+=("$(tr::t_args "tui::menu::flavors.option.cuda.stable.proprietary" "$version_stable")")
     option_actions+=("cudarepo::install_driver \"stable\" \"proprietary\"")
@@ -251,6 +262,8 @@ tr::add "pt_BR" "tui::menu::flavors.nav.start" "[TUI] Abrindo o menu Seleção d
 tr::add "pt_BR" "tui::menu::flavors.title" "SELECIONE O TIPO DE DRIVER"
 tr::add "pt_BR" "tui::menu::flavors.prompt" \
     "Proprietário → kernel fechado + bibliotecas fechadas.\nEstável e compatível, indicado para GTX 10xx ou anteriores.\n\nCódigo Aberto → kernel aberto + bibliotecas fechadas.\nMelhor integração ao Linux, indicado para GTX 16xx, RTX 20xx ou mais nova.\n\nMais detalhes: https://github.com/NVIDIA/open-gpu-kernel-modules"
+tr::add "pt_BR" "tui::menu::flavors.option.ubuntu.recommended" "Proprietário recomendado [Ubuntu Repo]"
+tr::add "pt_BR" "tui::menu::flavors.option.ubuntu.opensource" "Código Aberto mais recente [Ubuntu Repo]"
 tr::add "pt_BR" "tui::menu::flavors.option.debian.proprietary.535" "v535 Proprietário [Debian Repo]"
 tr::add "pt_BR" "tui::menu::flavors.option.debian.proprietary.550" "v550 Proprietário [Debian Repo]"
 tr::add "pt_BR" "tui::menu::flavors.option.debian.opensource.550" "v550 Código Aberto [Debian Repo]"
@@ -263,6 +276,8 @@ tr::add "en_US" "tui::menu::flavors.nav.start" "[TUI] Opening the Nvidia Driver 
 tr::add "en_US" "tui::menu::flavors.title" "SELECT DRIVER FLAVOR"
 tr::add "en_US" "tui::menu::flavors.prompt" \
     "Proprietary → closed kernel + closed libraries.\nStable and compatible, recommended for GTX 10xx or older.\n\nOpen Source → open kernel + closed libraries.\nBetter Linux integration, recommended for GTX 16xx, RTX 20xx or newer.\n\nMore details: https://github.com/NVIDIA/open-gpu-kernel-modules"
+tr::add "en_US" "tui::menu::flavors.option.ubuntu.recommended" "Recommended Proprietary [Ubuntu Repo]"
+tr::add "en_US" "tui::menu::flavors.option.ubuntu.opensource" "Latest Open Source [Ubuntu Repo]"
 tr::add "en_US" "tui::menu::flavors.option.debian.proprietary.535" "v535 Proprietary [Debian Repo]"
 tr::add "en_US" "tui::menu::flavors.option.debian.proprietary.550" "v550 Proprietary [Debian Repo]"
 tr::add "en_US" "tui::menu::flavors.option.debian.opensource.550" "v550 Open Source [Debian Repo]"

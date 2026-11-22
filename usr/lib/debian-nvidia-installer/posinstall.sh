@@ -27,7 +27,7 @@ post_installation::is_cuda_toolkit_installed() {
     fi
 
     case "$repo" in
-        debian)
+        debian|ubuntu)
 
             if packages::is_installed "nvidia-cuda-dev" || packages::is_installed "nvidia-cuda-toolkit"; then
                 return 0
@@ -68,7 +68,7 @@ posinstall::install_cuda_toolkit() {
     fi
 
     case "$repo" in
-        debian)
+        debian|ubuntu)
 
             if ! packages::install "nvidia-cuda-dev" "nvidia-cuda-toolkit"; then
                 log::error "$(tr::t "posinstall::install_cuda_toolkit.install_failure")"
@@ -121,7 +121,7 @@ posinstall::uninstall_cuda_toolkit() {
     fi
 
     case "$repo" in
-        debian)
+        debian|ubuntu)
 
             if ! packages::purge "nvidia-cuda-dev" "nvidia-cuda-toolkit"; then
                 log::error "$(tr::t "posinstall::uninstall_cuda_toolkit.uninstall_failure")"

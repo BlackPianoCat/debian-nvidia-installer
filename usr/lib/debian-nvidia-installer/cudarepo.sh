@@ -88,11 +88,13 @@ tr::add "en_US" "cudarepo::install_driver.confirm" "You are about to install the
 tr::add "en_US" "cudarepo::install_driver.invalid_flavor" "An unexpected error occurred: driver flavor %1 is not recognized by the script."
 
 cudarepo::install_cuda_repository() {
-    local temp_download_file="/tmp/cudakeyring.deb"
+    local temp_download_file
+    temp_download_file="$(mktemp /tmp/cudakeyring.XXXXXX.deb)" || return 1
     trap 'rm -f "$temp_download_file"' RETURN
 
     # Faz o download instalador do repositório CUDA
-    log::capture_cmd wget -O "$temp_download_file" https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb
+    log::capture_cmd wget --tries=3 --timeout=30 -O "$temp_download_file" \
+        "https://developer.download.nvidia.com/compute/cuda/repos/$(utils::os::cuda_repo_distro)/x86_64/cuda-keyring_1.1-1_all.deb"
     if [[ "$?" -ne 0 ]]; then
         log::critical "$(tr::t "cudarepo::install_cuda_repository.download_failure")"
         log::input _ "$(tr::t "default.script.pause")"
@@ -135,7 +137,7 @@ cudarepo::uninstall_cuda_repository() {
     fi
 
     # Removes the CUDA sources file if it exists
-    local cuda_sources="/etc/apt/sources.list.d/cuda-debian12-x86_64.sources"
+    local cuda_sources="/etc/apt/sources.list.d/cuda-$(utils::os::cuda_repo_distro)-x86_64.sources"
     if [ -f "$cuda_sources" ]; then
         log::info "$(tr::t "cudarepo::uninstall_cuda_repository.removing_sources")"
         if rm -f "$cuda_sources"; then

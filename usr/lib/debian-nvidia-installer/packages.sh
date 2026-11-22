@@ -18,6 +18,10 @@
 
 
 
+# Shared apt settings: wait for dpkg lock, never prompt, keep local configs
+declare -ga APT_ENV=(env DEBIAN_FRONTEND=noninteractive)
+declare -ga APT_OPTS=(-o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confold)
+
 # ----------------------------------------------------------------------------
 # Function: packages::check_sources_components
 # Description:
@@ -160,7 +164,8 @@ packages::add_sources_components() {
 
             # Add missing components at the end of the line and write changes to the tempfile
             if [ "${#missing_components[@]}" -gt 0 ]; then
-                new_line="${base_components[@]} ${line_components[@]} ${missing_components[@]}"
+                new_line="$(printf '%s ' "${base_components[@]}" "${line_components[@]}" "${missing_components[@]}")"
+                new_line="${new_line% }"
                 echo "$new_line" >> "$tempfile"
                 changed=1
                 continue
@@ -200,8 +205,23 @@ packages::add_sources_components() {
 #     0 - Update completed successfully.
 #     >0 - Update failed.
 # ----------------------------------------------------------------------------
+# Install only the packages apt knows about (skips missing ones)
+packages::install_available() {
+    local pkg avail=()
+    for pkg in "$@"; do
+        apt-cache show "$pkg" &>/dev/null && avail+=("$pkg") || log::warn "Package not available, skipping: $pkg"
+    done
+    [[ "${#avail[@]}" -eq 0 ]] && return 0
+    packages::install "${avail[@]}"
+}
+
 packages::update() {
-    log::capture_cmd apt-get update
+    local try
+    for try in 1 2 3; do
+        log::capture_cmd "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" update && return 0
+        sleep 3
+    done
+    return 1
 }
 
 
@@ -237,7 +257,7 @@ packages::is_installed() {
 #     >0 - Installation failed for one or more packages.
 # ----------------------------------------------------------------------------
 packages::install() {
-    log::capture_cmd apt-get install -y "$@"
+    log::capture_cmd "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install -y "$@"
 }
 
 
@@ -255,7 +275,7 @@ packages::install() {
 #     >0 - Reinstallation failed for one or more packages.
 # ----------------------------------------------------------------------------
 packages::reinstall() {
-    log::capture_cmd apt-get install --reinstall -y "$@"
+    log::capture_cmd "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" install --reinstall -y "$@"
 }
 
 
@@ -274,7 +294,7 @@ packages::reinstall() {
 #     >0 - Removal failed for one or more packages.
 # ----------------------------------------------------------------------------
 packages::remove() {
-    log::capture_cmd apt-get remove --autoremove -y "$@"
+    log::capture_cmd "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" remove --autoremove -y "$@"
 }
 
 
@@ -293,5 +313,5 @@ packages::remove() {
 #     >0 - Purge failed for one or more packages.
 # ----------------------------------------------------------------------------
 packages::purge() {
-    log::capture_cmd apt-get purge --autoremove -y "$@"
+    log::capture_cmd "${APT_ENV[@]}" apt-get "${APT_OPTS[@]}" purge --autoremove -y "$@"
 }

@@ -18,7 +18,14 @@
 # You should have received a copy of the GNU General Public License
 # along with debian-nvidia-installer. If not, see <https://www.gnu.org/licenses/gpl-3.0.html>.
 
-declare -g MOK_PUB_KEY="/var/lib/dkms/mok.pub"
+# Public MOK key path (Ubuntu uses shim-signed's key)
+mok::pub_key() {
+    if utils::os::is_ubuntu; then
+        echo "/var/lib/shim-signed/mok/MOK.der"
+    else
+        echo "/var/lib/dkms/mok.pub"
+    fi
+}
 
 # Verifica se o mokutil está instalado no sistema
 mok::check_mokutil() {
@@ -40,7 +47,7 @@ mok::check_secure_boot() {
 
 # Verifica se o MOK está inscrito
 mok::check_mok() {
-    local key="${1:-$MOK_PUB_KEY}"
+    local key="${1:-$(mok::pub_key)}"
     if [[ -f "$key" ]] && mokutil --test-key "$key" | grep -iq "already enrolled"; then
         return 0
     else
@@ -50,11 +57,19 @@ mok::check_mok() {
 
 # Gera a chave MOK
 mok::generate_mok() {
-    dkms generate_mok
+    if utils::os::is_ubuntu; then
+        update-secureboot-policy --new-key
+    else
+        dkms generate_mok
+    fi
 }
 
 # Importa a chave MOK, precisa da interação do usuário para definir a senha
 mok::import_mok() {
-    local key="${1:-$MOK_PUB_KEY}"
-    mokutil --import "$key"
+    local key="${1:-$(mok::pub_key)}"
+    if utils::os::is_ubuntu; then
+        update-secureboot-policy --enroll-key
+    else
+        mokutil --import "$key"
+    fi
 }
